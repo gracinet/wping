@@ -1,15 +1,18 @@
 [root]
 name = "wping"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "argparse 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "glob 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
- "pnet 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pnet_macros_support 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_macros 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_macros_support 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "resolve 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syntex 0.42.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -45,6 +48,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "idna"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -53,6 +61,11 @@ dependencies = [
  "unicode-bidi 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-normalization 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "ipnetwork"
+version = "0.12.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "kernel32-sys"
@@ -154,20 +167,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "pnet"
-version = "0.16.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
+ "ipnetwork 0.12.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
- "pnet_macros 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pnet_macros_support 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "syntex 0.42.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_base 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_datalink 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_packet 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_sys 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_transport 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "pnet_base"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "pnet_datalink"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "ipnetwork 0.12.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_base 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_sys 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "ws2_32-sys 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "pnet_macros"
-version = "0.13.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "regex 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -177,8 +208,44 @@ dependencies = [
 
 [[package]]
 name = "pnet_macros_support"
-version = "0.1.1"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "pnet_base 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "pnet_packet"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "glob 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_base 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_macros 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_macros_support 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syntex 0.42.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "pnet_sys"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ws2_32-sys 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "pnet_transport"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_base 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_packet 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet_sys 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "rand"
@@ -370,7 +437,9 @@ dependencies = [
 "checksum bitflags 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4f67931368edf3a9a51d29886d245f1c3db2f1ef0dcc9e35ff70341b78c10d23"
 "checksum byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c40977b0ee6b9885c9013cd41d9feffdd22deb3bb4dc3a71d901cc7a77de18c8"
 "checksum chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "158b0bd7d75cbb6bf9c25967a48a2e9f77da95876b858eadfabaa99cd069de6e"
+"checksum glob 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)" = "8be18de09a56b60ed0edf84bc9df007e30040691af7acd1c41874faac5895bfb"
 "checksum idna 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1053236e00ce4f668aeca4a769a09b3bf5a682d802abd6f3cb39374f6b162c11"
+"checksum ipnetwork 0.12.7 (registry+https://github.com/rust-lang/crates.io-index)" = "2134e210e2a024b5684f90e1556d5f71a1ce7f8b12e9ac9924c67fb36f63b336"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)" = "684f330624d8c3784fb9558ca46c4ce488073a8d22450415c5eb4f4cfb0d11b5"
 "checksum log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "ab83497bf8bf4ed2a74259c1c802351fcd67a65baa86394b6ba73c36f4838054"
@@ -383,9 +452,14 @@ dependencies = [
 "checksum num-iter 0.1.32 (registry+https://github.com/rust-lang/crates.io-index)" = "287a1c9969a847055e1122ec0ea7a5c5d6f72aad97934e131c83d5c08ab4e45c"
 "checksum num-rational 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)" = "54ff603b8334a72fbb27fe66948aac0abaaa40231b3cecd189e76162f6f38aaf"
 "checksum num-traits 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)" = "a16a42856a256b39c6d3484f097f6713e14feacd9bfb02290917904fae46c81c"
-"checksum pnet 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e183089b308e3860218d926c0d8393ecba5a4a161154f945f8b9c75382c63eda"
-"checksum pnet_macros 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)" = "73e9b934fe80312580c8542ec066b246abc12e164aca9f64c2972e061afa3582"
-"checksum pnet_macros_support 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d781ffd3812bf485c4f02210eeec5346ab0c42cdd59881550fff54dab3a098d1"
+"checksum pnet 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e866218222e997f8aeebbbda7761d29c3b75772573e65da68fff97c21c5754ad"
+"checksum pnet_base 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1ef91690b568c732663a6b4ccaf6e14fb62b985c9edee933c32c42d55f05a7b5"
+"checksum pnet_datalink 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bf82511ad5ea82f6d632a624edf7c60592271a1f76ecaeb7a7f2ae55f6e0c38a"
+"checksum pnet_macros 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "60fa5bee262cdfd7cb3871a9b205b2858c262e2e90e48b5e00626f5c0fa32182"
+"checksum pnet_macros_support 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "dc4fa05e0ee7d4911bc88f9da16eb0c8f238c5e001f45379e42c2b7cb35e53fc"
+"checksum pnet_packet 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "081e4b575f26366f33f195281e07a0bde6f2be810f904921887b15a3e82e58e4"
+"checksum pnet_sys 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3b834fac796acd6a4c66010d7fa14aa34d8a69d780e28aa754a24661d3738df3"
+"checksum pnet_transport 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "257eec056138182230f7f3c5dd065848fdfb09c93456adfdb583ec457dd3ed5a"
 "checksum rand 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)" = "022e0636ec2519ddae48154b028864bdce4eaf7d35226ab8e65c611be97b189d"
 "checksum redox_syscall 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)" = "8dd35cc9a8bdec562c757e3d43c1526b5c6d2653e23e2315065bc25556550753"
 "checksum regex 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4278c17d0f6d62dfef0ab00028feb45bd7d2102843f80763474eeb1be8a10c01"

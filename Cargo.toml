@@ -8,11 +8,22 @@ keywords = ["ping", "network"]
 readme = "README.md"
 repository = "https://github.com/aoikonomopoulos/wping"
 
+# build-dependencies copied over from pnet_packet
+# needed for ICMPv6 Echo abstractions
+[build-dependencies.syntex]
+version = "0.42"
+
+[build-dependencies.pnet_macros]
+version = ">=0.15"
+
+[build-dependencies.glob]
+version = "0.2"
+
 [dependencies.pnet]
-version = "0.16.0"
+version = "0.20.0"
 
 [dependencies.pnet_macros_support]
-version = "0.1.1"
+version = "0.20.0"
 
 [dependencies.libc]
 version = "0.2"

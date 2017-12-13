@@ -16,6 +16,7 @@ use pnet::transport::TransportChannelType::{Layer3};
 use pnet::packet::{Packet, MutablePacket};
 use pnet::packet::ipv4::{MutableIpv4Packet, Ipv4Flags};
 use pnet::packet::icmp::{IcmpPacket, IcmpCode, IcmpTypes};
+use pnet::packet::icmpv6::{Icmpv6Packet, Icmpv6Code, Icmpv6Types};
 use pnet::packet::icmp::echo_request::{MutableEchoRequestPacket};
 use pnet::packet::icmp::echo_reply::{EchoReplyPacket};
 use pnet::packet::icmp;
@@ -48,9 +49,14 @@ use argparse::{ArgumentParser, StoreOption, StoreTrue};
 
 mod ewma;
 mod columnar;
+mod icmpv6_echo;
+
 use columnar::{Columnar, Column};
 
 use ewma::Ewma;
+
+use icmpv6_echo::echo_reply::EchoReply as Ipv6EchoReply;
+use icmpv6_echo::echo_request::EchoRequest as Ipv6EchoRequest;
 
 type Seq = u16;
 
