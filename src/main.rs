@@ -140,6 +140,7 @@ fn icmp_set_timestamp(ipv4 : &mut MutableIpv4Packet) {
 }
 
 fn populate_packet(pkt_buf : &mut [u8], dst : &Ipv4Addr, icmp_payload : &[u8]) {
+    let buf_len = pkt_buf.len();
     let mut ipv4 = MutableIpv4Packet::new(pkt_buf).unwrap();
 
     ipv4.set_next_level_protocol(IpNextHeaderProtocols::Icmp);
@@ -150,6 +151,7 @@ fn populate_packet(pkt_buf : &mut [u8], dst : &Ipv4Addr, icmp_payload : &[u8]) {
     };
 
     ipv4.set_header_length(ipv4_header_len);
+    ipv4.set_total_length(buf_len as u16);
     ipv4.set_version(4);
     ipv4.set_ttl(64);
     ipv4.set_destination(*dst);
