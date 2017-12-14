@@ -12,19 +12,21 @@ extern crate resolve;
 use pnet::packet::ip::{IpNextHeaderProtocols};
 use pnet::transport::{ TransportSender, TransportReceiver,
                        transport_channel,ipv4_packet_iter};
-use pnet::transport::TransportChannelType::{Layer3};
+use pnet::transport::TransportChannelType::{Layer3, Layer4};
+use pnet::transport::TransportProtocol;
 use pnet::packet::{Packet, MutablePacket};
 use pnet::packet::ipv4::{MutableIpv4Packet, Ipv4Flags};
 use pnet::packet::icmp::{IcmpPacket, IcmpCode, IcmpTypes};
-use pnet::packet::icmpv6::{Icmpv6Packet, Icmpv6Code, Icmpv6Types};
+use pnet::packet::icmpv6::{self, Icmpv6Packet, Icmpv6Code, Icmpv6Types};
 use pnet::packet::icmp::echo_request::{MutableEchoRequestPacket};
 use pnet::packet::icmp::echo_reply::{EchoReplyPacket};
 use pnet::packet::icmp;
+use pnet_macros_support::packet::PacketSize;
 
 // checksum
 use pnet_macros_support::types::u16be;
 
-use std::net::{Ipv4Addr, IpAddr};
+use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
 use std::str::FromStr;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -55,8 +57,8 @@ use columnar::{Columnar, Column};
 
 use ewma::Ewma;
 
-use icmpv6_echo::echo_reply::EchoReply as Ipv6EchoReply;
-use icmpv6_echo::echo_request::EchoRequest as Ipv6EchoRequest;
+use icmpv6_echo::echo_reply::EchoReplyPacket as Ipv6EchoReplyPacket;
+use icmpv6_echo::echo_request::MutableEchoRequestPacket as MutableIpv6EchoRequestPacket;
 
 type Seq = u16;
 
@@ -121,6 +123,14 @@ fn icmp_checksum(ipv4 : &mut MutableIpv4Packet) {
     let mut ipv4_payload = ipv4.payload_mut();
     let mut echo_req = MutableEchoRequestPacket::new(ipv4_payload).unwrap();
     echo_req.set_checksum(csum);
+}
+
+fn echo_checksum_v6(echo : &mut MutableIpv6EchoRequestPacket, src: &Ipv6Addr, dest: &Ipv6Addr) {
+    let csum = {
+        let icmp = Icmpv6Packet::new(echo.packet()).unwrap();
+        icmpv6::checksum(&icmp, *src, *dest)
+        };
+    echo.set_checksum(csum);
 }
 
 fn icmp_update_seq(ipv4 : &mut MutableIpv4Packet, seq : u16) {
@@ -194,6 +204,67 @@ fn send_ping (mut tx : TransportSender, dst : Ipv4Addr, len : usize) -> Box<FnMu
 
         match tx.send_to(ipv4, IpAddr::V4(dst)) {
             Ok (bytes) => if bytes != total_len { panic!("Short send count: {}", bytes) },
+            Err (e) => panic!("Could not send: {}", e),
+        }
+    })
+}
+
+fn icmpv6_packet<'a>(pkt_buf: &'a mut [u8], icmp_payload: &[u8], seq: u16)
+                     -> MutableIpv6EchoRequestPacket<'a> {
+    let mut echo_req = MutableIpv6EchoRequestPacket::new(pkt_buf).unwrap();
+    echo_req.set_icmp_type(Icmpv6Types::EchoRequest);
+    echo_req.set_icmp_code(Icmpv6Code::new(0));
+    let pid = unsafe {getpid()};
+    echo_req.set_identifier(pid as u16);
+    echo_req.set_sequence_number(seq);
+    echo_req.set_payload(icmp_payload);
+    echo_req
+}
+
+fn echo_set_timestamp_v6(echo : &mut MutableIpv6EchoRequestPacket) {
+    let time = Local::now();
+    let secs = time.timestamp();
+    let ns = time.timestamp_subsec_nanos().to_be();
+    // XXX: subtract start time
+    let secs = (secs as u32).to_be();
+    let payload = echo.payload_mut();
+    (&mut payload[0..4]).write_u32::<BigEndian>(secs).unwrap();
+    (&mut payload[4..8]).write_u32::<BigEndian>(ns).unwrap();
+}
+
+fn send_ping_v6(mut tx : TransportSender, src: Ipv6Addr, dst : Ipv6Addr, len : usize) -> Box<FnMut(u16) -> ()> {
+
+    let timestamp_size = 2 * mem::size_of::<u32>();
+    let seq = (0u8..).take(u8::max_value() as usize).chain(Some(u8::max_value()));
+    // Send the same payload as iputils-ping
+    let icmp_payload : Vec<u8> = if len >= timestamp_size {
+        (vec![0u8; timestamp_size].into_iter()).chain(seq.cycle()).take(len).collect()
+    } else {
+        // Not enough space for a timestamp
+        seq.cycle().take(len).collect()
+    };
+    let ip_len = MutableIpv6EchoRequestPacket::minimum_packet_size() +
+        icmp_payload.len();
+    let mut pkt_buf : Vec<u8> = vec!(0; ip_len);
+
+    Box::new(move |seq| {
+        let mut icmp = icmpv6_packet(&mut pkt_buf, &icmp_payload, seq);
+
+        if len >= timestamp_size {
+            // This is totally unused, as we record the send time
+            // ourselves. It's only here so our packets look similar
+            // to iputils-ping. Perhaps we should replace it with a
+            // cookie to get rid of identifier conflicts (the PID is
+            // truncated to 16 bits, so we /could/ get confused with
+            // some other ping running on the same host).
+            echo_set_timestamp_v6(&mut icmp)
+        }
+        // apparently, something lower level (Rust lib or kernel) in my Linux development
+        // platform fixes the checksum anyway,
+        // but I can't be sure other contexts behave the same way, so better do it.
+        echo_checksum_v6(&mut icmp, &src, &dst);
+        match tx.send_to(icmp, IpAddr::V6(dst)) {
+            Ok (bytes) => if bytes != ip_len { panic!("Short send count: {} instead of {}", bytes, ip_len) },
             Err (e) => panic!("Could not send: {}", e),
         }
     })
@@ -439,8 +510,8 @@ fn do_response(rtt_estimate : &mut Option<Ewma>,
 }
 
 fn maybe_resolve(s : &str) -> Result<Vec<IpAddr>, String> {
-    match Ipv4Addr::from_str(s) {
-        Ok (addr) => Ok (vec![IpAddr::V4 (addr)]),
+    match IpAddr::from_str(s) {
+        Ok (addr) => Ok (vec![addr]),
         Err (_) => {
             let addrs = try!(resolve_host(&s).map_err(|e| String::from(e.description())));
             Ok (addrs.collect())
@@ -448,6 +519,7 @@ fn maybe_resolve(s : &str) -> Result<Vec<IpAddr>, String> {
     }
 }
 
+// GR TODO unused, now
 fn select_destination_address(addrs : &[IpAddr]) -> Ipv4Addr {
     addrs.iter().filter_map(|a| match *a {
         IpAddr::V4 (v4) => Some (v4),
@@ -464,7 +536,7 @@ fn select_destination_address(addrs : &[IpAddr]) -> Ipv4Addr {
     })
 }
 
-fn print_resolved_addrs(dest : &str, selected : &Ipv4Addr, addrs: &[IpAddr]) {
+fn print_resolved_addrs(dest : &str, selected : &IpAddr, addrs: &[IpAddr]) {
     let mut addrstrs = addrs.iter().map(|a| format!("{}", a)).peekable();
     let mut acc = String::new();
     loop {
@@ -612,11 +684,6 @@ fn main() {
         None => 56,
         Some (s) => parse_cli_int(&s),
     };
-    let protocol = Layer3(IpNextHeaderProtocols::Icmp);
-    let (tx, rx) = match transport_channel(4096, protocol) {
-        Ok ((tx, rx)) => (tx, rx),
-        Err (e) => panic!("Could not create the transport channel: {}", e)
-    };
     let interval = match opt_interval {
         None => 1000_000_000,
         Some (s) => (parse_cli_float(&s) * 1000_000_000.0) as u64
@@ -648,13 +715,26 @@ fn main() {
             std::process::exit(1)
         },
         Ok (addrs) => {
-            let selected = select_destination_address(&addrs);
+            let selected = addrs[0]; //select_destination_address(&addrs);
             print_resolved_addrs(&dest, &selected, &addrs);
             selected
         },
     };
 
-    let mut probe = send_ping(tx, dst, send_size);
+    let channel_type = match dst {
+        IpAddr::V4(_) => Layer3(IpNextHeaderProtocols::Icmp),
+        IpAddr::V6(_) => Layer4(TransportProtocol::Ipv6(IpNextHeaderProtocols::Icmpv6))
+    };
+    let (tx, rx) = match transport_channel(4096, channel_type) {
+        Ok ((tx, rx)) => (tx, rx),
+        Err (e) => panic!("Could not create the transport channel: {}", e)
+    };
+
+    let src6 = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1);
+    let mut probe = match dst {
+        IpAddr::V4(addr) => send_ping(tx, addr, send_size),
+        IpAddr::V6(addr) => send_ping_v6(tx, src6, addr, send_size)
+    };
     let mut seq = INITIAL_SEQ_NR;
     let mut stats = Stats::new(window_size).expect("Couldn't create ring buffer");
     let mut rtt_estimate : Option<Ewma> = None;
