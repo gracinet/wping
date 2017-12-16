@@ -583,6 +583,20 @@ fn select_destination_address(addrs: &[IpAddr]) -> Result<IpAddr, String> {
     }
 }
 
+fn select_destination_address_v4only(addrs: &[IpAddr]) -> Result<IpAddr, String> {
+    addrs.iter().filter_map(|a| match *a {
+        IpAddr::V4(_) => Some(*a),
+        _ => None}
+    ).next().ok_or("no IPv4 address for destination host".to_owned())
+}
+
+fn select_destination_address_v6only(addrs: &[IpAddr]) -> Result<IpAddr, String> {
+    addrs.iter().filter_map(|a| match *a {
+        IpAddr::V6(_) => Some(*a),
+        _ => None}
+    ).next().ok_or("no IPv6 address for destination host".to_owned())
+}
+
 fn print_resolved_addrs(dest : &str, selected : &IpAddr, addrs: &[IpAddr]) {
     let mut addrstrs = addrs.iter().map(|a| format!("{}", a)).peekable();
     let mut acc = String::new();
@@ -699,6 +713,8 @@ fn main() {
     let mut opt_window_size : Option<String> = None;
     let mut opt_extended_format : bool = false;
     let mut opt_send_size :Option<String> = None;
+    let mut opt_ipv4_only: bool = false;
+    let mut opt_ipv6_only: bool = false;
     {
         let mut parser = ArgumentParser::new();
         parser.refer(&mut dest).add_argument("address", StoreOption,
@@ -706,6 +722,10 @@ fn main() {
         parser.refer(&mut opt_interval).add_option(&["-i"], StoreOption, "Send interval");
         parser.refer(&mut opt_send_size).add_option(&["-s", "--packet-size"], StoreOption,
                                                "Payload size in bytes");
+        parser.refer(&mut opt_ipv4_only).
+            add_option(&["-4", "--ipv4"], StoreTrue, "Use IPv4 only");
+        parser.refer(&mut opt_ipv6_only).
+            add_option(&["-6", "--ipv6"], StoreTrue, "Use IPv6 only");
         parser.refer(&mut opt_window_size).
             add_option(&["--window"],StoreOption,
                        "Adaptive packet loss calculation for the last N probes");
@@ -755,6 +775,15 @@ fn main() {
                  "Need to supply a destination host").unwrap();
         std::process::exit(2)
     });
+    let select = if opt_ipv6_only {
+        select_destination_address_v6only
+    } else if opt_ipv4_only {
+        select_destination_address_v4only
+    }
+    else {
+        select_destination_address
+    };
+
     let dst = match maybe_resolve(&dest) {
         Err (e) => {
             writeln!(&mut std::io::stderr(),
@@ -762,7 +791,7 @@ fn main() {
             std::process::exit(1)
         },
         Ok (addrs) => {
-            match select_destination_address(&addrs) {
+            match select(&addrs) {
                 Ok(addr) => {
                     print_resolved_addrs(&dest, &addr, &addrs);
                     addr
@@ -783,7 +812,7 @@ fn main() {
         Ok ((tx, rx)) => (tx, rx),
         Err (e) => panic!("Could not create the transport channel: {}", e)
     };
-
+    // TODO
     let src6 = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1);
     let mut probe = match dst {
         IpAddr::V4(addr) => send_ping(tx, addr, send_size),
