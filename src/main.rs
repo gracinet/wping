@@ -519,21 +519,18 @@ fn maybe_resolve(s : &str) -> Result<Vec<IpAddr>, String> {
     }
 }
 
-// GR TODO unused, now
-fn select_destination_address(addrs : &[IpAddr]) -> Ipv4Addr {
-    addrs.iter().filter_map(|a| match *a {
-        IpAddr::V4 (v4) => Some (v4),
-        IpAddr::V6 (_) => None
-    }).next().unwrap_or_else(|| {
-        let msg = if addrs.is_empty() {
-            "no address for destination host"
-        } else {
-            "no IPv4 address for destination host"
-        };
-        writeln!(&mut std::io::stderr(),
-                 "Could not determine target address: {}", msg).unwrap();
-        std::process::exit(1)
-    })
+fn select_destination_address(addrs: &[IpAddr]) -> Result<IpAddr, String> {
+    let mut found: Option<IpAddr> = None;
+
+    for addr in addrs {
+        if addr.is_ipv6() || found.is_none() { found = Some(*addr); }
+        if addr.is_ipv6() { break; }
+    }
+
+    match found {
+        None => Err("Could not find a single address, how's that possible?".to_owned()),
+        Some(addr) => Ok(addr)
+    }
 }
 
 fn print_resolved_addrs(dest : &str, selected : &IpAddr, addrs: &[IpAddr]) {
@@ -715,9 +712,16 @@ fn main() {
             std::process::exit(1)
         },
         Ok (addrs) => {
-            let selected = addrs[0]; //select_destination_address(&addrs);
-            print_resolved_addrs(&dest, &selected, &addrs);
-            selected
+            match select_destination_address(&addrs) {
+                Ok(addr) => {
+                    print_resolved_addrs(&dest, &addr, &addrs);
+                    addr
+                },
+                Err(msg) => {
+                    writeln!(&mut std::io::stderr(), "{}", &msg);
+                    std::process::exit(1)
+                }
+            }
         },
     };
 
