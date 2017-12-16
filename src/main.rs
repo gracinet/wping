@@ -11,11 +11,13 @@ extern crate num;
 extern crate resolve;
 use pnet::packet::ip::{IpNextHeaderProtocols};
 use pnet::transport::{ TransportSender, TransportReceiver,
-                       transport_channel,ipv4_packet_iter};
+                       transport_channel,ipv4_packet_iter,
+                       icmpv6_packet_iter};
 use pnet::transport::TransportChannelType::{Layer3, Layer4};
 use pnet::transport::TransportProtocol;
 use pnet::packet::{Packet, MutablePacket};
 use pnet::packet::ipv4::{MutableIpv4Packet, Ipv4Flags};
+use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::icmp::{IcmpPacket, IcmpCode, IcmpTypes};
 use pnet::packet::icmpv6::{self, Icmpv6Packet, Icmpv6Code, Icmpv6Types};
 use pnet::packet::icmp::echo_request::{MutableEchoRequestPacket};
@@ -62,12 +64,26 @@ use icmpv6_echo::echo_request::MutableEchoRequestPacket as MutableIpv6EchoReques
 
 type Seq = u16;
 
+enum OptTtl {  // sames as Option<u8>, but can implement Display
+    None,
+    Some(u8)
+}
+
 struct PingResponse {
     nbytes : usize,
     addr : IpAddr,
     seq : Seq,
-    ttl : u8,
+    ttl : OptTtl,
     time : Instant,
+}
+
+impl std::fmt::Display for OptTtl {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            OptTtl::None => write!(f, "  -"),
+            OptTtl::Some(ttl) => write!(f, "{}", ttl)
+        }
+    }
 }
 
 fn process_responses(mut rx : TransportReceiver,
@@ -90,7 +106,41 @@ fn process_responses(mut rx : TransportReceiver,
                             nbytes : ipv4.payload().len(),
                             addr : addr,
                             seq : echoreply.get_sequence_number(),
-                            ttl : ipv4.get_ttl(),
+                            ttl : OptTtl::Some(ipv4.get_ttl()),
+                            time : t,
+                        };
+                        if sender.send(resp).is_err() {
+                            println!("Internal error: cannot send message to thread")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn process_responses_v6(mut rx : TransportReceiver,
+                sender : &mpsc::Sender<PingResponse>) -> ! {
+    let mut iter = icmpv6_packet_iter(&mut rx);
+    loop {
+        let res = iter.next();
+        let t = Instant::now();
+        match res {
+            Err (e) => {
+                println!("Error receiving packet: {}", e);
+            },
+            Ok ((icmpv6, addr)) => {
+                if let Some (echoreply) = Ipv6EchoReplyPacket::new(icmpv6.packet()) {
+                    if echoreply.get_icmp_type() == Icmpv6Types::EchoReply &&
+                        echoreply.get_identifier() == unsafe{getpid() as u16}
+                    {
+                        // XXX: check addr
+                        let resp = PingResponse {
+                            nbytes : echoreply.payload().len(),
+                            addr : addr,
+                            seq : echoreply.get_sequence_number(),
+                            // TODO we can't extract it, since we're operating below the IPv6 headers, should probably rewrite everything using IPv6 packets (too bored for that right now)
+                            ttl : OptTtl::None,
                             time : t,
                         };
                         if sender.send(resp).is_err() {
@@ -718,7 +768,7 @@ fn main() {
                     addr
                 },
                 Err(msg) => {
-                    writeln!(&mut std::io::stderr(), "{}", &msg);
+                    writeln!(&mut std::io::stderr(), "{}", &msg).unwrap();
                     std::process::exit(1)
                 }
             }
@@ -747,8 +797,11 @@ fn main() {
     // have to use a helper thread in order to wait for the next packet OR
     // the expiration of the send timer.
     let (sender, receiver) = mpsc::channel();
-    let _ = thread::spawn(move || {
-        process_responses(rx, &sender)});
+    let process_fn = match dst {
+        IpAddr::V4(_) => process_responses,
+        IpAddr::V6(_) => process_responses_v6
+    };
+    thread::spawn(move || {process_fn(rx, &sender)});
     let start_time = Instant::now();
 
     println!("{}", columnar.header());
